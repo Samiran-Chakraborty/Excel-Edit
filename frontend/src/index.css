@@ -1,0 +1,238 @@
+@import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg-main: #f3f2f1;
+  --bg-panel: #ffffff;
+  --border-color: #e1dfdd;
+  --text-main: #201f1e;
+  --text-muted: #605e5c;
+  --excel-green: #217346;
+  --excel-green-hover: #107c41;
+  --success: #107c41;
+  --danger: #d13438;
+  --warning: #ffb900;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', 'Inter', sans-serif;
+}
+
+body {
+  background: var(--bg-main);
+  color: var(--text-main);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  padding: 1.5rem;
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  height: 100%;
+  flex-grow: 1;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.header h1 {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--excel-green);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.header p {
+  color: var(--text-muted);
+  font-size: 1rem;
+  margin-top: 0.2rem;
+}
+
+.glass-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.upload-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--excel-green);
+  border-radius: 8px;
+  padding: 4rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #f8fbf9;
+}
+
+.upload-zone:hover {
+  background: #edf5f0;
+}
+
+.upload-icon {
+  width: 56px;
+  height: 56px;
+  color: var(--excel-green);
+  margin-bottom: 1rem;
+}
+
+.upload-text {
+  font-size: 1.3rem;
+  font-weight: 500;
+  color: var(--excel-green);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toolbar-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-radius: 2px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+  color: white;
+}
+
+.btn-primary, .btn-success {
+  background: var(--excel-green);
+}
+.btn-primary:hover, .btn-success:hover {
+  background: var(--excel-green-hover);
+}
+
+.btn-danger {
+  background: white;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.btn-danger:hover {
+  background: #fdf3f4;
+}
+
+.btn-secondary {
+  background: white;
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+}
+.btn-secondary:hover {
+  background: #f3f2f1;
+}
+
+.search-input {
+  background: white;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 0.5rem 0.8rem;
+  border-radius: 2px;
+  font-size: 0.9rem;
+  outline: none;
+  min-width: 250px;
+  transition: border-color 0.2s;
+}
+
+.search-input:focus {
+  border-color: var(--excel-green);
+}
+
+.grid-container {
+  flex-grow: 1;
+  min-height: 500px;
+  border: 1px solid var(--border-color);
+  background: white;
+}
+
+/* AG Grid Light Theme (Excel-like) Overrides */
+.ag-theme-alpine {
+  --ag-font-family: 'Segoe UI', 'Inter', sans-serif !important;
+  --ag-font-size: 13px !important;
+  --ag-header-background-color: #f3f2f1 !important;
+  --ag-header-foreground-color: #605e5c !important;
+  --ag-border-color: #e1dfdd !important;
+  --ag-row-hover-color: #f3f2f1 !important;
+  --ag-selected-row-background-color: #c7e0f4 !important;
+  --ag-odd-row-background-color: #ffffff !important;
+  --ag-control-panel-background-color: #f3f2f1 !important;
+  --ag-checkbox-checked-color: var(--excel-green) !important;
+  --ag-input-focus-border-color: var(--excel-green) !important;
+}
+
+/* Make the menu/filter button always visible on headers like Excel */
+.ag-theme-alpine .ag-header-cell-menu-button {
+  opacity: 1 !important;
+  display: flex !important;
+  align-items: center;
+  transition: none !important;
+}
+
+.edited-cell {
+  background-color: #e2f2e8 !important;
+  color: var(--excel-green) !important;
+  font-weight: 600;
+  border: 1px solid var(--excel-green) !important;
+}
+
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e1dfdd;
+  border-radius: 50%;
+  border-top-color: var(--excel-green);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

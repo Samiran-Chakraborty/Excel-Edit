@@ -1,0 +1,22 @@
+services:
+  # ── Backend API ──────────────────────────────────────────────
+  - type: web
+    name: excel-edit-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+  # ── Frontend (Static Site) ────────────────────────────────────
+  - type: web
+    name: excel-edit-frontend
+    runtime: node
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npx serve dist
+    envVars:
+      - key: NODE_ENV
+        value: production

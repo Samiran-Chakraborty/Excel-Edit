@@ -7,6 +7,23 @@ import 'ag-grid-community/styles/ag-theme-alpine.css';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
+const SpaceHighlightRenderer = (props) => {
+  if (props.value == null) return null;
+  const valStr = String(props.value);
+  const parts = valStr.split(/( )/g);
+  
+  return (
+    <span>
+      {parts.map((part, index) => {
+        if (part === ' ') {
+          return <span key={index} className="space-highlight"> </span>;
+        }
+        return <span key={index}>{part}</span>;
+      })}
+    </span>
+  );
+};
+
 export default function ExcelGrid({ rowData, columnDefs, onGridReady, onCellValueChanged, gridRef, searchText }) {
   const defaultColDef = useMemo(() => {
     return {
@@ -17,6 +34,7 @@ export default function ExcelGrid({ rowData, columnDefs, onGridReady, onCellValu
       sortable: true,
       filter: ExcelSetFilter,
       columnMenu: 'new',
+      cellRenderer: SpaceHighlightRenderer,
     };
   }, []);
 
@@ -55,8 +73,6 @@ export default function ExcelGrid({ rowData, columnDefs, onGridReady, onCellValu
         theme="legacy"
         rowSelection={{ mode: 'multiRow', enableClickSelection: false }}
         getRowClass={getRowClass}
-        undoRedoCellEditing={true}
-        undoRedoCellEditingLimit={20}
         enableCellChangeFlash={true}
       />
     </div>

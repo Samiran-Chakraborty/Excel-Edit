@@ -93,6 +93,12 @@ body {
   background: #edf5f0;
 }
 
+.upload-zone.is-dragging {
+  background: #e2f2e8;
+  border-color: var(--excel-green-hover);
+  transform: scale(1.02);
+}
+
 .upload-icon {
   width: 56px;
   height: 56px;
@@ -235,4 +241,24 @@ body {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+.space-highlight {
+  display: inline-block;
+  background-color: rgba(209, 52, 56, 0.25);
+  position: relative;
+  white-space: pre;
+}
+
+.space-highlight::after {
+  content: '·';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--danger);
+  font-size: 1.2em;
+  font-weight: bold;
+  opacity: 0.5;
+  pointer-events: none;
 }

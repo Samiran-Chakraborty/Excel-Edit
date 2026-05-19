@@ -1,6 +1,7 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import axios from 'axios';
-import { Upload, Download, Scissors, Trash2, Search, FileSpreadsheet, Eraser } from 'lucide-react';
+import { Upload, Download, Scissors, Trash2, Search, FileSpreadsheet, Eraser, Undo2, Redo2 } from 'lucide-react';
+import { Toaster, toast } from 'react-hot-toast';
 import ExcelGrid from './components/ExcelGrid';
 
 function App() {
@@ -14,19 +15,74 @@ function App() {
   const gridRef = useRef();
   const fileInputRef = useRef(null);
 
+  const [isDragging, setIsDragging] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [future, setFuture] = useState([]);
+
+  const saveHistoryBeforeAction = () => {
+    if (!gridApi) return;
+    const currentData = [];
+    gridApi.forEachNode(node => {
+      currentData.push(JSON.parse(JSON.stringify(node.data)));
+    });
+    setHistory(prev => [...prev, currentData].slice(-20));
+    setFuture([]);
+  };
+
+  const handleUndo = useCallback(() => {
+    if (!gridApi || history.length === 0) return;
+    
+    const currentData = [];
+    gridApi.forEachNode(node => currentData.push(JSON.parse(JSON.stringify(node.data))));
+    setFuture(prev => [currentData, ...prev].slice(-20));
+
+    const previousState = history[history.length - 1];
+    setHistory(prev => prev.slice(0, -1));
+
+    setRowData(previousState);
+  }, [gridApi, history]);
+
+  const handleRedo = useCallback(() => {
+    if (!gridApi || future.length === 0) return;
+
+    const currentData = [];
+    gridApi.forEachNode(node => currentData.push(JSON.parse(JSON.stringify(node.data))));
+    setHistory(prev => [...prev, currentData].slice(-20));
+
+    const nextState = future[0];
+    setFuture(prev => prev.slice(1));
+
+    setRowData(nextState);
+  }, [gridApi, future]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      
+      if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        handleUndo();
+      } else if (e.ctrlKey && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleUndo, handleRedo]);
+
   const handleGridReady = (params) => {
     setGridApi(params.api);
   };
 
-  const handleFileUpload = async (e) => {
-    const selectedFile = e.target.files[0];
+  const processFile = async (selectedFile) => {
     if (!selectedFile) return;
 
     const validExtensions = ['.xlsx', '.xls', '.csv', '.ods', '.xlsb', '.xlsm', '.txt'];
     const extension = '.' + selectedFile.name.split('.').pop().toLowerCase();
     
     if (!validExtensions.includes(extension)) {
-      alert('Please upload a valid spreadsheet file (.xlsx, .xls, .csv, .ods, etc).');
+      toast.error('Please upload a valid spreadsheet file (.xlsx, .xls, .csv, .ods, etc).');
       return;
     }
 
@@ -75,9 +131,31 @@ function App() {
       setSheetName(sName);
     } catch (error) {
       console.error('Upload error:', error);
-      alert('Failed to process the file.');
+      toast.error('Failed to process the file.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFileUpload = (e) => {
+    processFile(e.target.files[0]);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFile(e.dataTransfer.files[0]);
     }
   };
 
@@ -87,6 +165,8 @@ function App() {
     setColumnDefs([]);
     setSheetName('');
     setSearchText('');
+    setHistory([]);
+    setFuture([]);
     setGridApi(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -96,6 +176,18 @@ function App() {
   const handleCellValueChanged = useCallback((params) => {
     const { colDef, data, oldValue, newValue } = params;
     if (oldValue !== newValue) {
+      // Save history BEFORE applying the change
+      const previousData = [];
+      params.api.forEachNode(node => {
+        const rowDataCopy = JSON.parse(JSON.stringify(node.data));
+        if (node.data === data) {
+           rowDataCopy[colDef.field] = oldValue;
+        }
+        previousData.push(rowDataCopy);
+      });
+      setHistory(prev => [...prev, previousData].slice(-20));
+      setFuture([]);
+
       data._editedCells = { ...data._editedCells, [colDef.field]: true };
       data._isEditedRow = true;
       params.api.applyTransaction({ update: [data] });
@@ -104,6 +196,9 @@ function App() {
 
   const trimText = () => {
     if (!gridApi) return;
+    
+    saveHistoryBeforeAction();
+    
     const rowNodes = [];
     gridApi.forEachNode(node => rowNodes.push(node));
 
@@ -132,14 +227,18 @@ function App() {
 
     if (updatedRows.length > 0) {
       gridApi.applyTransaction({ update: updatedRows });
-      alert(`Trimmed text in ${updatedRows.length} rows.`);
+      toast.success(`Trimmed text in ${updatedRows.length} rows.`);
     } else {
-      alert('No extra spaces found.');
+      // Remove the useless history state if nothing changed
+      setHistory(prev => prev.slice(0, -1));
+      toast('No extra spaces found.');
     }
   };
 
   const removeEmptyRowsColumns = () => {
     if (!gridApi) return;
+    
+    saveHistoryBeforeAction();
     
     // Remove empty rows
     const rowNodes = [];
@@ -157,27 +256,28 @@ function App() {
 
     if (rowsToRemove.length > 0) {
       gridApi.applyTransaction({ remove: rowsToRemove });
+      toast.success(`Removed ${rowsToRemove.length} empty rows.`);
+    } else {
+      setHistory(prev => prev.slice(0, -1));
+      toast(`No empty rows found.`);
     }
-
-    // We can also implement removing empty columns, but standard Excel 
-    // files usually have fixed headers. For simplicity, we just remove empty rows.
-    alert(`Removed ${rowsToRemove.length} empty rows.`);
   };
 
   const deleteSelectedRows = () => {
     if (!gridApi) return;
     const selectedRows = gridApi.getSelectedRows();
     if (selectedRows.length === 0) {
-      alert('Please select rows to delete first.');
+      toast.error('Please select rows to delete first.');
       return;
     }
     
+    saveHistoryBeforeAction();
     gridApi.applyTransaction({ remove: selectedRows });
   };
 
   const handleSaveAndDownload = async () => {
     if (!gridApi) {
-      alert('Grid is not ready. Please try again.');
+      toast.error('Grid is not ready. Please try again.');
       return;
     }
     setLoading(true);
@@ -215,7 +315,7 @@ function App() {
       link.parentNode.removeChild(link);
     } catch (error) {
       console.error('Download error:', error);
-      alert('Failed to generate Excel file.');
+      toast.error('Failed to generate Excel file.');
     } finally {
       setLoading(false);
     }
@@ -223,6 +323,7 @@ function App() {
 
   return (
     <div className="app-container">
+      <Toaster position="bottom-right" />
       <header className="header">
         <h1>Excel Web Editor</h1>
         <p>Upload, Edit, Clean, and Download Spreadsheets</p>
@@ -237,7 +338,13 @@ function App() {
 
       {!rowData.length ? (
         <div className="glass-panel" style={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <label className="upload-zone">
+          <label 
+            className={`upload-zone ${isDragging ? 'is-dragging' : ''}`}
+            onDragOver={handleDragOver}
+            onDragEnter={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             <input 
               type="file" 
               accept=".xlsx, .xls, .csv, .ods, .xlsb, .xlsm, .txt" 
@@ -255,7 +362,25 @@ function App() {
           <div className="glass-panel">
             <div className="toolbar">
               <div className="toolbar-group">
-                <div style={{ position: 'relative' }}>
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={handleUndo}
+                  disabled={history.length === 0}
+                  title="Undo (Ctrl+Z)"
+                  style={{ padding: '0.5rem', opacity: history.length === 0 ? 0.5 : 1, cursor: history.length === 0 ? 'not-allowed' : 'pointer' }}
+                >
+                  <Undo2 size={18} />
+                </button>
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={handleRedo}
+                  disabled={future.length === 0}
+                  title="Redo (Ctrl+Y)"
+                  style={{ padding: '0.5rem', opacity: future.length === 0 ? 0.5 : 1, cursor: future.length === 0 ? 'not-allowed' : 'pointer' }}
+                >
+                  <Redo2 size={18} />
+                </button>
+                <div style={{ position: 'relative', marginLeft: '0.5rem' }}>
                   <Search style={{ position: 'absolute', left: '10px', top: '10px', color: 'var(--text-muted)', width: '18px', height: '18px' }} />
                   <input
                     type="text"

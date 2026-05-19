@@ -1,10 +1,10 @@
 {
   "name": "excel-edit",
   "version": "1.0.0",
-  "description": "Excel Web Editor - Backend",
+  "description": "Excel Web Editor",
   "scripts": {
     "start": "node backend/server.js",
-    "build": "cd backend && npm install"
+    "build": "cd backend && npm install && cd ../frontend && npm install && npm run build"
   },
   "engines": {
     "node": ">=18.0.0"

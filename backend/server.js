@@ -2,6 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import * as xlsx from 'xlsx';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -13,10 +18,9 @@ app.use(express.json({ limit: '50mb' }));
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// Health check
-app.get('/', (req, res) => {
-  res.json({ status: 'ok', message: 'Excel Editor API is running 🚀' });
-});
+// Serve built React frontend
+const frontendDist = path.join(__dirname, '..', 'frontend', 'dist');
+app.use(express.static(frontendDist));
 
 // Upload Endpoint
 app.post('/api/upload', upload.single('file'), (req, res) => {
@@ -96,6 +100,11 @@ app.post('/api/download', (req, res) => {
   }
 });
 
+// Catch-all: serve React app for any non-API route
+app.get('*', (req, res) => {
+  res.sendFile(path.join(frontendDist, 'index.html'));
+});
+
 app.listen(port, () => {
-  console.log(`Backend server running on http://localhost:${port}`);
+  console.log(`Server running on http://localhost:${port}`);
 });

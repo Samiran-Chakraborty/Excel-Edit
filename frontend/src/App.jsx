@@ -93,7 +93,7 @@ function App() {
     formData.append('file', selectedFile);
 
     try {
-      const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/upload`, formData, {
+      const response = await axios.post('/api/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
@@ -297,7 +297,7 @@ function App() {
       const bookType = validExportTypes.includes(extStr) ? extStr : 'xlsx';
       const filename = file ? `edited_${file.name}` : `edited_data.${bookType}`;
 
-      const response = await axios.post(`${import.meta.env.VITE_API_URL}/api/download`, {
+      const response = await axios.post('/api/download', {
         rows,
         sheetName: sheetName || 'Sheet1',
         bookType,

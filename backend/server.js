@@ -13,6 +13,11 @@ app.use(express.json({ limit: '50mb' }));
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
+// Health check
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'Excel Editor API is running 🚀' });
+});
+
 // Upload Endpoint
 app.post('/api/upload', upload.single('file'), (req, res) => {
   if (!req.file) {

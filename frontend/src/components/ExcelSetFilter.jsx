@@ -1,20 +1,24 @@
-import React, { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useGridFilter } from 'ag-grid-react';
 
-const ExcelSetFilter = forwardRef((props, ref) => {
+export default function ExcelSetFilter(props) {
+  const { model, onModelChange, getValue, colDef, api } = props;
+  
   const [uniqueValues, setUniqueValues] = useState([]);
-  const uniqueValuesRef = useRef([]);
   const [selectedValues, setSelectedValues] = useState(new Set());
-  const appliedValuesRef = useRef(new Set());
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Extract unique values
+  // Extract unique values from the grid data
   const updateValues = useCallback(() => {
-    if (!props.api) return;
+    if (!api) return;
     
     const values = new Set();
-    props.api.forEachNode(node => {
-      if (node.data && node.data[props.colDef.field] !== undefined) {
-        values.add(node.data[props.colDef.field]);
+    api.forEachNode(node => {
+      if (node.data) {
+        const val = getValue ? getValue(node) : node.data[colDef.field];
+        if (val !== undefined) {
+          values.add(val);
+        }
       }
     });
     
@@ -25,67 +29,51 @@ const ExcelSetFilter = forwardRef((props, ref) => {
       return String(a).localeCompare(String(b));
     });
 
-    const wasAllSelected = appliedValuesRef.current.size === uniqueValuesRef.current.length || uniqueValuesRef.current.length === 0;
-    
     setUniqueValues(sortedValues);
-    uniqueValuesRef.current = sortedValues;
-    
-    if (wasAllSelected) {
-      setSelectedValues(new Set(sortedValues));
-      appliedValuesRef.current = new Set(sortedValues);
-    } else {
-      const validSelected = new Set(Array.from(appliedValuesRef.current).filter(v => values.has(v)));
-      setSelectedValues(validSelected);
-      appliedValuesRef.current = validSelected;
-    }
-  }, [props.api, props.colDef.field]);
+  }, [api, colDef.field, getValue]);
 
+  // Listen to grid changes to update unique values
   useEffect(() => {
     updateValues();
 
-    if (!props.api) return;
+    if (!api) return;
 
     const onDataChanged = () => {
       updateValues();
     };
 
-    props.api.addEventListener('cellValueChanged', onDataChanged);
-    props.api.addEventListener('rowDataUpdated', onDataChanged);
+    api.addEventListener('cellValueChanged', onDataChanged);
+    api.addEventListener('rowDataUpdated', onDataChanged);
 
     return () => {
-      props.api.removeEventListener('cellValueChanged', onDataChanged);
-      props.api.removeEventListener('rowDataUpdated', onDataChanged);
+      api.removeEventListener('cellValueChanged', onDataChanged);
+      api.removeEventListener('rowDataUpdated', onDataChanged);
     };
-  }, [props.api, updateValues]);
+  }, [api, updateValues]);
 
-  // Expose AG Grid filter lifecycle methods using standard useImperativeHandle
-  useImperativeHandle(ref, () => {
-    return {
-      afterGuiAttached: () => {
-        updateValues();
-      },
-      isFilterActive: () => {
-        return appliedValuesRef.current.size !== uniqueValuesRef.current.length && uniqueValuesRef.current.length > 0;
-      },
-      doesFilterPass: (params) => {
-        const val = params.data[props.colDef.field];
-        return appliedValuesRef.current.has(val);
-      },
-      getModel: () => {
-        if (appliedValuesRef.current.size === uniqueValuesRef.current.length || uniqueValuesRef.current.length === 0) return null;
-        return { values: Array.from(appliedValuesRef.current) };
-      },
-      setModel: (model) => {
-        if (model && model.values) {
-          const newSet = new Set(model.values);
-          appliedValuesRef.current = newSet;
-          setSelectedValues(newSet);
-        } else {
-          appliedValuesRef.current = new Set(uniqueValuesRef.current);
-          setSelectedValues(new Set(uniqueValuesRef.current));
-        }
-      }
-    };
+  // Sync selected values in UI with the active model
+  useEffect(() => {
+    if (model && model.values) {
+      setSelectedValues(new Set(model.values));
+    } else {
+      setSelectedValues(new Set(uniqueValues));
+    }
+  }, [model, uniqueValues]);
+
+  // Define doesFilterPass logic for AG Grid
+  const doesFilterPass = useCallback((params) => {
+    const { node } = params;
+    const val = getValue ? getValue(node) : (node.data ? node.data[colDef.field] : undefined);
+    
+    if (!model || !model.values) return true;
+    
+    const selectedSet = new Set(model.values);
+    return selectedSet.has(val);
+  }, [model, colDef.field, getValue]);
+
+  // Register with AG Grid using the useGridFilter hook
+  useGridFilter({
+    doesFilterPass
   });
 
   const onSearchChange = (e) => {
@@ -110,48 +98,41 @@ const ExcelSetFilter = forwardRef((props, ref) => {
     setSelectedValues(newSelected);
   };
 
-  const onOk = () => {
-    appliedValuesRef.current = new Set(selectedValues);
-    
-    // Build the new model
-    const model = appliedValuesRef.current.size === uniqueValuesRef.current.length || uniqueValuesRef.current.length === 0
-      ? null
-      : { values: Array.from(appliedValuesRef.current) };
-      
-    // Notify AG Grid of the filter change
-    if (typeof props.onModelChange === "function") {
-      props.onModelChange(model);
-    } else if (typeof props.filterChangedCallback === "function") {
-      props.filterChangedCallback();
-    } else {
-      props.api.onFilterChanged();
-    }
-    
-    // Close the filter menu
+  const closePopup = () => {
     if (typeof props.hidePopup === 'function') {
       props.hidePopup();
-    } else if (props.api && typeof props.api.hidePopupMenu === 'function') {
-      props.api.hidePopupMenu();
+    } else if (api && typeof api.hidePopupMenu === 'function') {
+      api.hidePopupMenu();
     } else {
-      // Dispatch Escape to close popups
       document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     }
+  };
+
+  const onOk = () => {
+    const allSelected = selectedValues.size === uniqueValues.length;
+    const newModel = allSelected || uniqueValues.length === 0
+      ? null
+      : { values: Array.from(selectedValues) };
+      
+    onModelChange(newModel);
+    closePopup();
   };
 
   const onCancel = () => {
-    setSelectedValues(new Set(appliedValuesRef.current)); // Revert UI to applied state
-    if (typeof props.hidePopup === 'function') {
-      props.hidePopup();
-    } else if (props.api && typeof props.api.hidePopupMenu === 'function') {
-      props.api.hidePopupMenu();
+    // Revert UI to the current model state
+    if (model && model.values) {
+      setSelectedValues(new Set(model.values));
     } else {
-      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      setSelectedValues(new Set(uniqueValues));
     }
+    closePopup();
   };
 
-  const filteredValues = uniqueValues.filter(v => 
-    String(v).toLowerCase().includes(searchTerm)
-  );
+  const filteredValues = useMemo(() => {
+    return uniqueValues.filter(v => 
+      String(v).toLowerCase().includes(searchTerm)
+    );
+  }, [uniqueValues, searchTerm]);
 
   const isAllSelected = selectedValues.size === uniqueValues.length;
   const isIndeterminate = selectedValues.size > 0 && selectedValues.size < uniqueValues.length;
@@ -249,6 +230,4 @@ const ExcelSetFilter = forwardRef((props, ref) => {
 
     </div>
   );
-});
-
-export default ExcelSetFilter;
+}

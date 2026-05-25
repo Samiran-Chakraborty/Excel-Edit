@@ -26,6 +26,8 @@ function App() {
   const [addTextCol, setAddTextCol] = useState('');
   const [addTextMode, setAddTextMode] = useState('prefix'); // 'prefix' | 'suffix' | 'custom'
   const [addTextValue, setAddTextValue] = useState('');
+  const [applyToAllSheets, setApplyToAllSheets] = useState(false);
+  
   // Condition state (only apply where...)
   const [useCondition, setUseCondition] = useState(false);
   const [condCol, setCondCol] = useState('');
@@ -353,26 +355,22 @@ function App() {
 
     saveHistoryBeforeAction();
 
+    // 1. Apply to active sheet (via gridApi so UI updates instantly)
     const rowNodes = [];
     gridApi.forEachNode(node => rowNodes.push(node));
     const updatedRows = [];
+    let totalUpdated = 0;
 
     rowNodes.forEach(node => {
       const data = node.data;
-
-      // Skip rows that don't match the condition
       if (!rowMatchesCondition(data)) return;
 
       const original = data[addTextCol] !== undefined ? String(data[addTextCol]) : '';
       let newVal = original;
 
-      if (addTextMode === 'prefix') {
-        newVal = addTextValue + original;
-      } else if (addTextMode === 'suffix') {
-        newVal = original + addTextValue;
-      } else if (addTextMode === 'custom') {
-        newVal = addTextValue.replace(/\{\{value\}\}/g, original);
-      }
+      if (addTextMode === 'prefix') newVal = addTextValue + original;
+      else if (addTextMode === 'suffix') newVal = original + addTextValue;
+      else if (addTextMode === 'custom') newVal = addTextValue.replace(/\{\{value\}\}/g, original);
 
       if (newVal !== original) {
         data[addTextCol] = newVal;
@@ -384,11 +382,60 @@ function App() {
 
     if (updatedRows.length > 0) {
       gridApi.applyTransaction({ update: updatedRows });
-      toast.success(`Updated ${updatedRows.length} cells in "${addTextCol}".`);
+      totalUpdated += updatedRows.length;
+    }
+
+    // 2. Apply to inactive sheets if requested
+    if (applyToAllSheets && sheets.length > 1) {
+      const updatedSheets = [...sheets];
+      for (let i = 0; i < updatedSheets.length; i++) {
+        if (i === activeSheetIndex) continue; // Already done above
+        
+        let sheetWasModified = false;
+        const newRowData = updatedSheets[i].rowData.map(row => {
+          // If the column doesn't exist on this sheet, skip it
+          if (row[addTextCol] === undefined) return row;
+          
+          if (!rowMatchesCondition(row)) return row;
+
+          const original = String(row[addTextCol]);
+          let newVal = original;
+          if (addTextMode === 'prefix') newVal = addTextValue + original;
+          else if (addTextMode === 'suffix') newVal = original + addTextValue;
+          else if (addTextMode === 'custom') newVal = addTextValue.replace(/\{\{value\}\}/g, original);
+
+          if (newVal !== original) {
+            sheetWasModified = true;
+            totalUpdated++;
+            return {
+              ...row,
+              [addTextCol]: newVal,
+              _editedCells: { ...(row._editedCells || {}), [addTextCol]: true },
+              _isEditedRow: true
+            };
+          }
+          return row;
+        });
+
+        if (sheetWasModified) {
+          // Keep a backup of history for inactive sheets before modifying
+          const previousState = JSON.parse(JSON.stringify(updatedSheets[i].rowData));
+          updatedSheets[i].history = [...(updatedSheets[i].history || []), previousState].slice(-20);
+          updatedSheets[i].future = [];
+          
+          updatedSheets[i].rowData = newRowData;
+        }
+      }
+      setSheets(updatedSheets);
+    }
+
+    if (totalUpdated > 0) {
+      toast.success(`Updated ${totalUpdated} cells across ${applyToAllSheets ? 'all sheets' : 'the sheet'}.`);
     } else {
       setHistory(prev => prev.slice(0, -1));
       toast('No changes made — check your condition or text.');
     }
+    
     setShowAddText(false);
     setAddTextValue('');
   };
@@ -775,7 +822,18 @@ function App() {
                 )}
 
                 {/* Actions */}
-                <div className="add-text-actions">
+                <div className="add-text-actions" style={{ alignItems: 'center' }}>
+                  {sheets.length > 1 && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', marginRight: 'auto', fontSize: '0.85rem' }}>
+                      <input
+                        type="checkbox"
+                        checked={applyToAllSheets}
+                        onChange={e => setApplyToAllSheets(e.target.checked)}
+                        style={{ accentColor: 'var(--excel-green)', width: 14, height: 14 }}
+                      />
+                      Apply to all sheets
+                    </label>
+                  )}
                   <button className="btn btn-secondary" onClick={() => setShowAddText(false)}>Cancel</button>
                   <button
                     className="btn btn-success"

@@ -191,6 +191,40 @@ function App() {
     }
   };
 
+  const getCurrentGridData = () => {
+    if (!gridApi) return [];
+    gridApi.stopEditing(false);
+    const rows = [];
+    gridApi.forEachNodeAfterFilterAndSort(node => {
+      rows.push(node.data);
+    });
+    return rows;
+  };
+
+  const handleTabSwitch = (index) => {
+    if (index === activeSheetIndex || !gridApi) return;
+    
+    // Save current sheet data
+    const currentData = getCurrentGridData();
+    const updatedSheets = [...sheets];
+    updatedSheets[activeSheetIndex] = {
+      ...updatedSheets[activeSheetIndex],
+      rowData: currentData
+    };
+    
+    setSheets(updatedSheets);
+    setActiveSheetIndex(index);
+    
+    // Load new sheet data
+    const nextSheet = updatedSheets[index];
+    setRowData(nextSheet.rowData);
+    setColumnDefs(nextSheet.columnDefs);
+    setSheetName(nextSheet.sheetName);
+    
+    setHistory([]);
+    setFuture([]);
+  };
+
   const applyHighlightDuplicates = () => {
     if (!gridApi) return;
     

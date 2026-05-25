@@ -367,6 +367,10 @@ function App() {
       toast.error('Grid is not ready. Please try again.');
       return;
     }
+    
+    // Stop any active cell editing to ensure the latest changes are saved
+    gridApi.stopEditing(false);
+    
     setLoading(true);
 
     const rows = [];

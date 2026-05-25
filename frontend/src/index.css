@@ -432,6 +432,13 @@ body {
   border: 1px solid var(--border-color);
   border-top: none;
   overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.sheet-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .sheet-tab {

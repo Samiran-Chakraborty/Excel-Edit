@@ -423,4 +423,50 @@ body {
   border-top: 1px dashed var(--border-color);
 }
 
+/* ── Sheet Tabs ─────────────────────────────────── */
+.sheet-tabs {
+  display: flex;
+  gap: 0.2rem;
+  padding: 0 1rem;
+  background: white;
+  border: 1px solid var(--border-color);
+  border-top: none;
+  overflow-x: auto;
+}
+
+.sheet-tab {
+  padding: 0.6rem 1.2rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: #f8fbf9;
+  border: 1px solid var(--border-color);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+  margin-top: 0.4rem;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.sheet-tab:hover {
+  background: #edf5f0;
+}
+
+.sheet-tab.active {
+  background: white;
+  color: var(--excel-green);
+  font-weight: 600;
+  border-bottom: 2px solid white;
+  margin-bottom: -1px;
+  box-shadow: 0 -2px 0 0 var(--excel-green);
+  z-index: 1;
+}
+
+/* ── Duplicate Row Highlighting ─────────────────────────────────── */
+.duplicate-row {
+  background-color: #fdf3f4 !important;
+  color: var(--danger) !important;
+}
+
 

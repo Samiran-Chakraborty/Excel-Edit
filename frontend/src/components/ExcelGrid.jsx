@@ -39,6 +39,9 @@ export default function ExcelGrid({ rowData, columnDefs, onGridReady, onCellValu
   }, []);
 
   const getRowClass = (params) => {
+    if (params.data && params.data._isDuplicate) {
+      return 'duplicate-row';
+    }
     if (params.data && params.data._isEditedRow) {
       return 'edited-row';
     }

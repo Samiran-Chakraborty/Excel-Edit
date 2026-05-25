@@ -6,6 +6,8 @@ import ExcelGrid from './components/ExcelGrid';
 
 function App() {
   const [file, setFile] = useState(null);
+  const [sheets, setSheets] = useState([]);
+  const [activeSheetIndex, setActiveSheetIndex] = useState(0);
   const [rowData, setRowData] = useState([]);
   const [columnDefs, setColumnDefs] = useState([]);
   const [sheetName, setSheetName] = useState('');
@@ -29,6 +31,10 @@ function App() {
   const [condCol, setCondCol] = useState('');
   const [condOp, setCondOp] = useState('equals'); // equals | contains | startswith | endswith
   const [condVal, setCondVal] = useState('');
+  
+  // Highlight Duplicates state
+  const [showHighlightDupes, setShowHighlightDupes] = useState(false);
+  const [dupeCol, setDupeCol] = useState('ALL');
 
   const saveHistoryBeforeAction = () => {
     if (!gridApi) return;
@@ -108,7 +114,7 @@ function App() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
-      const { headers, rows, sheetName: sName } = response.data;
+      const fetchedSheets = response.data.sheets;
       
       const rowNumberCol = {
         headerName: '',
@@ -125,21 +131,20 @@ function App() {
         cellStyle: { background: '#f3f2f1', color: '#605e5c', textAlign: 'center', fontWeight: '500', borderRight: '1px solid #e1dfdd' }
       };
 
-      // Create AG Grid column definitions
-      const newColDefs = [
-        rowNumberCol,
-        ...headers.map(header => ({
-          field: header,
-          headerName: header,
-        }))
-      ];
+      const processedSheets = fetchedSheets.map(s => ({
+        sheetName: s.sheetName,
+        columnDefs: [
+          rowNumberCol,
+          ...s.headers.map(header => ({ field: header, headerName: header }))
+        ],
+        rowData: s.rows.map(r => ({ ...r, _editedCells: {} }))
+      }));
 
-      // Add internal tracking properties to rows
-      const initialRows = rows.map(r => ({ ...r, _editedCells: {} }));
-
-      setColumnDefs(newColDefs);
-      setRowData(initialRows);
-      setSheetName(sName);
+      setSheets(processedSheets);
+      setActiveSheetIndex(0);
+      setColumnDefs(processedSheets[0].columnDefs);
+      setRowData(processedSheets[0].rowData);
+      setSheetName(processedSheets[0].sheetName);
     } catch (error) {
       console.error('Upload error:', error);
       toast.error('Failed to process the file.');
@@ -172,6 +177,8 @@ function App() {
 
   const handleClearFile = () => {
     setFile(null);
+    setSheets([]);
+    setActiveSheetIndex(0);
     setRowData([]);
     setColumnDefs([]);
     setSheetName('');
@@ -182,6 +189,77 @@ function App() {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const applyHighlightDuplicates = () => {
+    if (!gridApi) return;
+    
+    saveHistoryBeforeAction();
+    const rowNodes = [];
+    gridApi.forEachNode(node => rowNodes.push(node));
+    
+    const seen = new Set();
+    const updatedRows = [];
+    let dupeCount = 0;
+
+    rowNodes.forEach(node => {
+      const data = node.data;
+      let key = '';
+      if (dupeCol === 'ALL') {
+        const cleanData = {};
+        Object.keys(data).forEach(k => {
+          if (!k.startsWith('_')) cleanData[k] = data[k];
+        });
+        key = JSON.stringify(cleanData);
+      } else {
+        key = data[dupeCol] !== undefined ? String(data[dupeCol]) : '';
+      }
+
+      if (seen.has(key)) {
+        if (!data._isDuplicate) {
+          data._isDuplicate = true;
+          updatedRows.push(data);
+          dupeCount++;
+        }
+      } else {
+        seen.add(key);
+        if (data._isDuplicate) {
+          data._isDuplicate = false;
+          updatedRows.push(data);
+        }
+      }
+    });
+
+    if (updatedRows.length > 0) {
+      gridApi.applyTransaction({ update: updatedRows });
+      gridApi.redrawRows();
+    }
+    
+    if (dupeCount > 0) {
+      toast.error(`Found ${dupeCount} duplicate rows.`);
+    } else {
+      toast.success('No duplicates found.');
+    }
+    setShowHighlightDupes(false);
+  };
+
+  const clearDuplicatesHighlight = () => {
+    if (!gridApi) return;
+    const rowNodes = [];
+    gridApi.forEachNode(node => rowNodes.push(node));
+    const updatedRows = [];
+    rowNodes.forEach(node => {
+      if (node.data._isDuplicate) {
+        node.data._isDuplicate = false;
+        updatedRows.push(node.data);
+      }
+    });
+    if (updatedRows.length > 0) {
+      gridApi.applyTransaction({ update: updatedRows });
+      gridApi.redrawRows();
+      toast.success('Cleared duplicate highlights.');
+    }
+    setShowHighlightDupes(false);
   };
 
   const handleCellValueChanged = useCallback((params) => {
@@ -382,6 +460,22 @@ function App() {
       rows.push(cleanData);
     });
 
+    // Prepare all sheets
+    const payloadSheets = sheets.map((s, idx) => {
+      if (idx === activeSheetIndex) {
+        return { sheetName: s.sheetName, rows: rows };
+      }
+      return {
+        sheetName: s.sheetName,
+        rows: s.rowData.map(r => {
+          const cleanData = { ...r };
+          delete cleanData._editedCells;
+          delete cleanData._isEditedRow;
+          return cleanData;
+        })
+      };
+    });
+
     try {
       const extStr = file ? file.name.split('.').pop().toLowerCase() : 'xlsx';
       const validExportTypes = ['xlsx', 'xls', 'xlsb', 'xlsm', 'csv', 'ods', 'txt'];
@@ -389,8 +483,7 @@ function App() {
       const filename = file ? `edited_${file.name}` : `edited_data.${bookType}`;
 
       const response = await axios.post('/api/download', {
-        rows,
-        sheetName: sheetName || 'Sheet1',
+        sheets: payloadSheets,
         bookType,
         filename
       }, {
@@ -490,9 +583,15 @@ function App() {
                 </button>
                 <button
                   className={`btn btn-secondary ${showAddText ? 'btn-active' : ''}`}
-                  onClick={() => { setShowAddText(v => !v); setAddTextValue(''); setAddTextCol(columnDefs.filter(c => c.field).map(c => c.field)[0] || ''); }}
+                  onClick={() => { setShowAddText(v => !v); setShowHighlightDupes(false); setAddTextValue(''); setAddTextCol(columnDefs.filter(c => c.field).map(c => c.field)[0] || ''); }}
                 >
                   <Type size={18} /> Add Text
+                </button>
+                <button
+                  className={`btn btn-secondary ${showHighlightDupes ? 'btn-active' : ''}`}
+                  onClick={() => { setShowHighlightDupes(v => !v); setShowAddText(false); }}
+                >
+                  <Search size={18} /> Highlight Duplicates
                 </button>
                 <button className="btn btn-secondary" onClick={removeEmptyRowsColumns}>
                   <Eraser size={18} /> Remove Empty Rows
@@ -632,6 +731,36 @@ function App() {
                   >
                     Apply to All Rows
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Highlight Duplicates Panel */}
+          {showHighlightDupes && (
+            <div className="add-text-panel">
+              <div className="add-text-panel-header" style={{ background: '#d13438' }}>
+                <Search size={16} />
+                <span>Highlight Duplicates</span>
+              </div>
+              <div className="add-text-panel-body">
+                <div className="add-text-field">
+                  <label>Column to check</label>
+                  <select
+                    value={dupeCol}
+                    onChange={e => setDupeCol(e.target.value)}
+                    className="add-text-select"
+                  >
+                    <option value="ALL">All Columns (Entire Row)</option>
+                    {columnDefs.filter(c => c.field).map(c => (
+                      <option key={c.field} value={c.field}>{c.headerName || c.field}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="add-text-actions">
+                  <button className="btn btn-secondary" onClick={() => setShowHighlightDupes(false)}>Cancel</button>
+                  <button className="btn btn-danger" onClick={applyHighlightDuplicates}>Find Duplicates</button>
+                  <button className="btn btn-secondary" onClick={clearDuplicatesHighlight}>Clear</button>
                 </div>
               </div>
             </div>

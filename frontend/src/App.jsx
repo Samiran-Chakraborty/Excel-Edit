@@ -775,6 +775,21 @@ function App() {
             onCellValueChanged={handleCellValueChanged}
             searchText={searchText}
           />
+          
+          {/* Sheet Tabs */}
+          {sheets.length > 1 && (
+            <div className="sheet-tabs">
+              {sheets.map((sheet, idx) => (
+                <button
+                  key={idx}
+                  className={`sheet-tab ${idx === activeSheetIndex ? 'active' : ''}`}
+                  onClick={() => handleTabSwitch(idx)}
+                >
+                  {sheet.sheetName}
+                </button>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>

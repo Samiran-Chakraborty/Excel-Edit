@@ -231,7 +231,12 @@ function App() {
     // Reset toolbar panel states
     setShowAddText(false);
     setAddTextValue('');
-    setAddTextCol(nextSheet.columnDefs.filter(c => c.field).map(c => c.field)[0] || '');
+    const firstCol = nextSheet.columnDefs.filter(c => c.field).map(c => c.field)[0] || '';
+    setAddTextCol(firstCol);
+    
+    setUseCondition(false);
+    setCondCol(firstCol);
+    setCondVal('');
     
     setShowHighlightDupes(false);
     setDupeCol('ALL');

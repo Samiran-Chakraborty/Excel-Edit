@@ -24,6 +24,11 @@ function App() {
   const [addTextCol, setAddTextCol] = useState('');
   const [addTextMode, setAddTextMode] = useState('prefix'); // 'prefix' | 'suffix' | 'custom'
   const [addTextValue, setAddTextValue] = useState('');
+  // Condition state (only apply where...)
+  const [useCondition, setUseCondition] = useState(false);
+  const [condCol, setCondCol] = useState('');
+  const [condOp, setCondOp] = useState('equals'); // equals | contains | startswith | endswith
+  const [condVal, setCondVal] = useState('');
 
   const saveHistoryBeforeAction = () => {
     if (!gridApi) return;
@@ -200,6 +205,20 @@ function App() {
     }
   }, []);
 
+  // Check if a row matches the condition
+  const rowMatchesCondition = (data) => {
+    if (!useCondition || !condCol || !condVal) return true;
+    const cell = data[condCol] !== undefined ? String(data[condCol]) : '';
+    const val  = condVal;
+    switch (condOp) {
+      case 'equals':     return cell === val;
+      case 'contains':   return cell.includes(val);
+      case 'startswith': return cell.startsWith(val);
+      case 'endswith':   return cell.endsWith(val);
+      default:           return true;
+    }
+  };
+
   const applyAddText = () => {
     if (!gridApi || !addTextCol || !addTextValue) return;
 
@@ -211,6 +230,10 @@ function App() {
 
     rowNodes.forEach(node => {
       const data = node.data;
+
+      // Skip rows that don't match the condition
+      if (!rowMatchesCondition(data)) return;
+
       const original = data[addTextCol] !== undefined ? String(data[addTextCol]) : '';
       let newVal = original;
 
@@ -219,7 +242,6 @@ function App() {
       } else if (addTextMode === 'suffix') {
         newVal = original + addTextValue;
       } else if (addTextMode === 'custom') {
-        // Replace {{value}} placeholder with original cell value
         newVal = addTextValue.replace(/\{\{value\}\}/g, original);
       }
 
@@ -236,18 +258,19 @@ function App() {
       toast.success(`Updated ${updatedRows.length} cells in "${addTextCol}".`);
     } else {
       setHistory(prev => prev.slice(0, -1));
-      toast('No changes made.');
+      toast('No changes made — check your condition or text.');
     }
     setShowAddText(false);
     setAddTextValue('');
   };
 
-  // Live preview of what the first non-empty cell in selected col will look like
+  // Live preview — pick first row that matches condition
   const getAddTextPreview = () => {
     if (!gridApi || !addTextCol || !addTextValue) return null;
     let sample = '';
     gridApi.forEachNode(node => {
-      if (!sample && node.data[addTextCol] !== undefined && node.data[addTextCol] !== '') {
+      if (!sample && rowMatchesCondition(node.data) &&
+          node.data[addTextCol] !== undefined && node.data[addTextCol] !== '') {
         sample = String(node.data[addTextCol]);
       }
     });
@@ -492,7 +515,7 @@ function App() {
               <div className="add-text-panel-body">
                 {/* Column selector */}
                 <div className="add-text-field">
-                  <label>Column</label>
+                  <label>Apply to Column</label>
                   <select
                     value={addTextCol}
                     onChange={e => setAddTextCol(e.target.value)}
@@ -503,6 +526,53 @@ function App() {
                     ))}
                   </select>
                 </div>
+
+                {/* Condition toggle */}
+                <div className="add-text-field" style={{ justifyContent: 'flex-end' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', textTransform: 'none', letterSpacing: 0, fontSize: '0.85rem' }}>
+                    <input
+                      type="checkbox"
+                      checked={useCondition}
+                      onChange={e => { setUseCondition(e.target.checked); setCondVal(''); setCondCol(columnDefs.filter(c => c.field)[0]?.field || ''); }}
+                      style={{ accentColor: 'var(--excel-green)', width: 14, height: 14 }}
+                    />
+                    Only where…
+                  </label>
+                </div>
+
+                {/* Condition row */}
+                {useCondition && (
+                  <>
+                    <div className="add-text-field">
+                      <label>If Column</label>
+                      <select value={condCol} onChange={e => setCondCol(e.target.value)} className="add-text-select">
+                        {columnDefs.filter(c => c.field).map(c => (
+                          <option key={c.field} value={c.field}>{c.headerName || c.field}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="add-text-field">
+                      <label>Operator</label>
+                      <select value={condOp} onChange={e => setCondOp(e.target.value)} className="add-text-select" style={{ minWidth: 130 }}>
+                        <option value="equals">= Equals</option>
+                        <option value="contains">Contains</option>
+                        <option value="startswith">Starts with</option>
+                        <option value="endswith">Ends with</option>
+                      </select>
+                    </div>
+                    <div className="add-text-field">
+                      <label>Value</label>
+                      <input
+                        type="text"
+                        className="add-text-input"
+                        style={{ minWidth: 140 }}
+                        placeholder="e.g.  T_1"
+                        value={condVal}
+                        onChange={e => setCondVal(e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
 
                 {/* Mode tabs */}
                 <div className="add-text-field">

@@ -413,3 +413,14 @@ body {
   margin-left: auto;
 }
 
+.add-text-condition-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: flex-end;
+  width: 100%;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--border-color);
+}
+
+

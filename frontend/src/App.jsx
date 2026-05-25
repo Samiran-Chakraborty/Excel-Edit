@@ -227,6 +227,14 @@ function App() {
     
     setHistory(nextSheet.history || []);
     setFuture(nextSheet.future || []);
+
+    // Reset toolbar panel states
+    setShowAddText(false);
+    setAddTextValue('');
+    setAddTextCol(nextSheet.columnDefs.filter(c => c.field).map(c => c.field)[0] || '');
+    
+    setShowHighlightDupes(false);
+    setDupeCol('ALL');
   };
 
   const applyHighlightDuplicates = () => {

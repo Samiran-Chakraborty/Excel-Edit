@@ -137,7 +137,9 @@ function App() {
           rowNumberCol,
           ...s.headers.map(header => ({ field: header, headerName: header }))
         ],
-        rowData: s.rows.map(r => ({ ...r, _editedCells: {} }))
+        rowData: s.rows.map(r => ({ ...r, _editedCells: {} })),
+        history: [],
+        future: []
       }));
 
       setSheets(processedSheets);
@@ -204,25 +206,27 @@ function App() {
   const handleTabSwitch = (index) => {
     if (index === activeSheetIndex || !gridApi) return;
     
-    // Save current sheet data
+    // Save current sheet data and history state
     const currentData = getCurrentGridData();
     const updatedSheets = [...sheets];
     updatedSheets[activeSheetIndex] = {
       ...updatedSheets[activeSheetIndex],
-      rowData: currentData
+      rowData: currentData,
+      history: history,
+      future: future
     };
     
     setSheets(updatedSheets);
     setActiveSheetIndex(index);
     
-    // Load new sheet data
+    // Load new sheet data and its history
     const nextSheet = updatedSheets[index];
     setRowData(nextSheet.rowData);
     setColumnDefs(nextSheet.columnDefs);
     setSheetName(nextSheet.sheetName);
     
-    setHistory([]);
-    setFuture([]);
+    setHistory(nextSheet.history || []);
+    setFuture(nextSheet.future || []);
   };
 
   const applyHighlightDuplicates = () => {

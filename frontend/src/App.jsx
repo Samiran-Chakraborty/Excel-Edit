@@ -336,9 +336,9 @@ function App() {
 
   // Check if a row matches the condition
   const rowMatchesCondition = (data) => {
-    if (!useCondition || !condCol || !condVal) return true;
+    if (!useCondition || !condCol) return true;
     const cell = data[condCol] !== undefined ? String(data[condCol]) : '';
-    const val  = condVal;
+    const val  = condVal || '';
     switch (condOp) {
       case 'equals':     return cell === val;
       case 'contains':   return cell.includes(val);
@@ -780,7 +780,7 @@ function App() {
                     disabled={!addTextCol || !addTextValue}
                     onClick={applyAddText}
                   >
-                    Apply to All Rows
+                    {useCondition ? 'Apply to Matching Rows' : 'Apply to All Rows'}
                   </button>
                 </div>
               </div>

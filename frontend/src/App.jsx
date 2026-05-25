@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import axios from 'axios';
-import { Upload, Download, Scissors, Trash2, Search, FileSpreadsheet, Eraser, Undo2, Redo2 } from 'lucide-react';
+import { Upload, Download, Scissors, Trash2, Search, FileSpreadsheet, Eraser, Undo2, Redo2, Type } from 'lucide-react';
 import { Toaster, toast } from 'react-hot-toast';
 import ExcelGrid from './components/ExcelGrid';
 
@@ -18,6 +18,12 @@ function App() {
   const [isDragging, setIsDragging] = useState(false);
   const [history, setHistory] = useState([]);
   const [future, setFuture] = useState([]);
+
+  // Add Text panel state
+  const [showAddText, setShowAddText] = useState(false);
+  const [addTextCol, setAddTextCol] = useState('');
+  const [addTextMode, setAddTextMode] = useState('prefix'); // 'prefix' | 'suffix' | 'custom'
+  const [addTextValue, setAddTextValue] = useState('');
 
   const saveHistoryBeforeAction = () => {
     if (!gridApi) return;
@@ -193,6 +199,64 @@ function App() {
       params.api.applyTransaction({ update: [data] });
     }
   }, []);
+
+  const applyAddText = () => {
+    if (!gridApi || !addTextCol || !addTextValue) return;
+
+    saveHistoryBeforeAction();
+
+    const rowNodes = [];
+    gridApi.forEachNode(node => rowNodes.push(node));
+    const updatedRows = [];
+
+    rowNodes.forEach(node => {
+      const data = node.data;
+      const original = data[addTextCol] !== undefined ? String(data[addTextCol]) : '';
+      let newVal = original;
+
+      if (addTextMode === 'prefix') {
+        newVal = addTextValue + original;
+      } else if (addTextMode === 'suffix') {
+        newVal = original + addTextValue;
+      } else if (addTextMode === 'custom') {
+        // Replace {{value}} placeholder with original cell value
+        newVal = addTextValue.replace(/\{\{value\}\}/g, original);
+      }
+
+      if (newVal !== original) {
+        data[addTextCol] = newVal;
+        data._editedCells = { ...data._editedCells, [addTextCol]: true };
+        data._isEditedRow = true;
+        updatedRows.push(data);
+      }
+    });
+
+    if (updatedRows.length > 0) {
+      gridApi.applyTransaction({ update: updatedRows });
+      toast.success(`Updated ${updatedRows.length} cells in "${addTextCol}".`);
+    } else {
+      setHistory(prev => prev.slice(0, -1));
+      toast('No changes made.');
+    }
+    setShowAddText(false);
+    setAddTextValue('');
+  };
+
+  // Live preview of what the first non-empty cell in selected col will look like
+  const getAddTextPreview = () => {
+    if (!gridApi || !addTextCol || !addTextValue) return null;
+    let sample = '';
+    gridApi.forEachNode(node => {
+      if (!sample && node.data[addTextCol] !== undefined && node.data[addTextCol] !== '') {
+        sample = String(node.data[addTextCol]);
+      }
+    });
+    if (!sample) return null;
+    if (addTextMode === 'prefix') return addTextValue + sample;
+    if (addTextMode === 'suffix') return sample + addTextValue;
+    if (addTextMode === 'custom') return addTextValue.replace(/\{\{value\}\}/g, sample);
+    return null;
+  };
 
   const trimText = () => {
     if (!gridApi) return;
@@ -397,6 +461,12 @@ function App() {
                 <button className="btn btn-secondary" onClick={trimText}>
                   <Scissors size={18} /> Trim Text
                 </button>
+                <button
+                  className={`btn btn-secondary ${showAddText ? 'btn-active' : ''}`}
+                  onClick={() => { setShowAddText(v => !v); setAddTextValue(''); setAddTextCol(columnDefs.filter(c => c.field).map(c => c.field)[0] || ''); }}
+                >
+                  <Type size={18} /> Add Text
+                </button>
                 <button className="btn btn-secondary" onClick={removeEmptyRowsColumns}>
                   <Eraser size={18} /> Remove Empty Rows
                 </button>
@@ -411,7 +481,88 @@ function App() {
                 </button>
               </div>
             </div>
-          </div>
+
+          {/* Add Text Panel */}
+          {showAddText && (
+            <div className="add-text-panel">
+              <div className="add-text-panel-header">
+                <Type size={16} />
+                <span>Add Text to Column</span>
+              </div>
+              <div className="add-text-panel-body">
+                {/* Column selector */}
+                <div className="add-text-field">
+                  <label>Column</label>
+                  <select
+                    value={addTextCol}
+                    onChange={e => setAddTextCol(e.target.value)}
+                    className="add-text-select"
+                  >
+                    {columnDefs.filter(c => c.field).map(c => (
+                      <option key={c.field} value={c.field}>{c.headerName || c.field}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Mode tabs */}
+                <div className="add-text-field">
+                  <label>Position</label>
+                  <div className="add-text-tabs">
+                    {['prefix', 'suffix', 'custom'].map(mode => (
+                      <button
+                        key={mode}
+                        className={`add-text-tab ${addTextMode === mode ? 'active' : ''}`}
+                        onClick={() => { setAddTextMode(mode); setAddTextValue(''); }}
+                      >
+                        {mode === 'prefix' ? '← Prefix' : mode === 'suffix' ? 'Suffix →' : '✦ Custom'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Text input */}
+                <div className="add-text-field">
+                  <label>
+                    {addTextMode === 'prefix' && 'Text to add at the front'}
+                    {addTextMode === 'suffix' && 'Text to add at the end'}
+                    {addTextMode === 'custom' && <>Pattern — use <code>{'{{}}'}</code> for original value</>}
+                  </label>
+                  <input
+                    type="text"
+                    className="add-text-input"
+                    placeholder={
+                      addTextMode === 'prefix' ? 'e.g.  ID_' :
+                      addTextMode === 'suffix' ? 'e.g.  _done' :
+                      'e.g.  prefix_{{value}}_suffix'
+                    }
+                    value={addTextValue}
+                    onChange={e => setAddTextValue(e.target.value)}
+                  />
+                </div>
+
+                {/* Live preview */}
+                {getAddTextPreview() && (
+                  <div className="add-text-preview">
+                    <span className="preview-label">Preview:</span>
+                    <span className="preview-value">{getAddTextPreview()}</span>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="add-text-actions">
+                  <button className="btn btn-secondary" onClick={() => setShowAddText(false)}>Cancel</button>
+                  <button
+                    className="btn btn-success"
+                    disabled={!addTextCol || !addTextValue}
+                    onClick={applyAddText}
+                  >
+                    Apply to All Rows
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
           <ExcelGrid 
             gridRef={gridRef}

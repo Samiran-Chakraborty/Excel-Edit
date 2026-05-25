@@ -508,6 +508,7 @@ function App() {
       const cleanData = { ...node.data };
       delete cleanData._editedCells;
       delete cleanData._isEditedRow;
+      delete cleanData._isDuplicate;
       rows.push(cleanData);
     });
 
@@ -522,6 +523,7 @@ function App() {
           const cleanData = { ...r };
           delete cleanData._editedCells;
           delete cleanData._isEditedRow;
+          delete cleanData._isDuplicate;
           return cleanData;
         })
       };
